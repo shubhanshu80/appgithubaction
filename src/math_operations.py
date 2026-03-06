@@ -1,5 +1,9 @@
-def add(a,b):
-    return a+b
+"""Math operations module for basic arithmetic operations."""
 
-def sub(a,b):
-    return a-b 
+def add(a, b):
+    """Add two numbers and return the result."""
+    return a + b
+
+def sub(a, b):
+    """Subtract two numbers and return the result."""
+    return a - b
