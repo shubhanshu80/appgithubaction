@@ -1,0 +1,360 @@
+#!/usr/bin/env python3
+"""
+Simple DAG Visualizer - Generate HTML visualization of the ML pipeline DAG
+"""
+
+import json
+from datetime import datetime
+
+# Define the DAG structure
+dag_tasks = {
+    'fetch_data': {
+        'description': 'Fetch data from source',
+        'depends_on': [],
+        'color': '#4CAF50'
+    },
+    'validate_data': {
+        'description': 'Validate fetched data quality',
+        'depends_on': ['fetch_data'],
+        'color': '#2196F3'
+    },
+    'preprocess_data': {
+        'description': 'Clean and preprocess data',
+        'depends_on': ['validate_data'],
+        'color': '#FF9800'
+    },
+    'train_model': {
+        'description': 'Train ML model',
+        'depends_on': ['preprocess_data'],
+        'color': '#9C27B0'
+    },
+    'evaluate_model': {
+        'description': 'Evaluate model performance',
+        'depends_on': ['train_model'],
+        'color': '#F44336'
+    },
+    'run_tests': {
+        'description': 'Run unit tests',
+        'depends_on': ['train_model'],
+        'color': '#00BCD4'
+    },
+    'deploy_model': {
+        'description': 'Deploy to production',
+        'depends_on': ['evaluate_model', 'run_tests'],
+        'color': '#8BC34A'
+    },
+    'log_results': {
+        'description': 'Log final results',
+        'depends_on': ['deploy_model'],
+        'color': '#607D8B'
+    }
+}
+
+html_content = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ML Pipeline DAG Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section-title {
+            font-size: 1.8em;
+            color: #333;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        #dag-container {
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            min-height: 600px;
+            border: 2px dashed #ddd;
+        }
+        
+        svg {
+            width: 100%;
+            height: auto;
+        }
+        
+        .node {
+            stroke: #333;
+            stroke-width: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .node:hover {
+            stroke-width: 4px;
+            filter: drop-shadow(0 0 8px rgba(0,0,0,0.3));
+        }
+        
+        .node text {
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            fill: white;
+        }
+        
+        .link {
+            stroke: #999;
+            stroke-width: 2px;
+            fill: none;
+            marker-end: url(#arrowhead);
+        }
+        
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 6px;
+        }
+        
+        .legend-color {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid #333;
+        }
+        
+        .task-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .task-card {
+            background: white;
+            border-left: 4px solid;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .task-card h3 {
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        .task-card p {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .footer {
+            background: #f5f5f5;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 ML Pipeline DAG Visualization</h1>
+            <p>Apache Airflow Directed Acyclic Graph</p>
+        </div>
+        
+        <div class="content">
+            <h2 class="section-title">DAG Graph</h2>
+            <div id="dag-container">
+                <svg id="dag-svg"></svg>
+            </div>
+            
+            <h2 class="section-title">Task Details</h2>
+            <div class="task-list" id="task-list"></div>
+            
+            <h2 class="section-title">Legend</h2>
+            <div class="legend" id="legend"></div>
+        </div>
+        
+        <div class="footer">
+            <p>Generated on """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + """</p>
+            <p>ML CI/CD Pipeline with Apache Airflow</p>
+        </div>
+    </div>
+    
+    <script>
+        const tasks = """ + json.dumps(dag_tasks) + """;
+        
+        // Generate Legend
+        const legendContainer = document.getElementById('legend');
+        Object.entries(tasks).forEach(([taskId, taskData]) => {
+            const item = document.createElement('div');
+            item.className = 'legend-item';
+            item.innerHTML = `
+                <div class="legend-color" style="background-color: ${taskData.color}"></div>
+                <span>${taskId.replace(/_/g, ' ').toUpperCase()}</span>
+            `;
+            legendContainer.appendChild(item);
+        });
+        
+        // Generate Task Cards
+        const taskListContainer = document.getElementById('task-list');
+        Object.entries(tasks).forEach(([taskId, taskData]) => {
+            const card = document.createElement('div');
+            card.className = 'task-card';
+            card.style.borderLeftColor = taskData.color;
+            const dependencies = taskData.depends_on.length > 0 ? taskData.depends_on.join(', ') : 'None';
+            card.innerHTML = `
+                <h3>${taskId.replace(/_/g, ' ').toUpperCase()}</h3>
+                <p><strong>Description:</strong> ${taskData.description}</p>
+                <p><strong>Depends on:</strong> ${dependencies}</p>
+            `;
+            taskListContainer.appendChild(card);
+        });
+        
+        // Create DAG visualization
+        const svg = d3.select("#dag-svg");
+        const width = document.getElementById("dag-container").clientWidth;
+        const height = 600;
+        
+        svg.attr("width", width).attr("height", height);
+        
+        // Add arrow marker
+        svg.append("defs").append("marker")
+            .attr("id", "arrowhead")
+            .attr("markerWidth", 10)
+            .attr("markerHeight", 10)
+            .attr("refX", 9)
+            .attr("refY", 3)
+            .attr("orient", "auto")
+            .append("polygon")
+            .attr("points", "0 0, 10 3, 0 6")
+            .attr("fill", "#999");
+        
+        // Create nodes
+        const nodeRadius = 40;
+        const taskIds = Object.keys(tasks);
+        const positionMap = {
+            'fetch_data': [100, 100],
+            'validate_data': [100, 200],
+            'preprocess_data': [100, 300],
+            'train_model': [100, 400],
+            'evaluate_model': [300, 400],
+            'run_tests': [500, 400],
+            'deploy_model': [400, 500],
+            'log_results': [400, 600]
+        };
+        
+        // Create links
+        const links = [];
+        Object.entries(tasks).forEach(([taskId, taskData]) => {
+            taskData.depends_on.forEach(dep => {
+                links.push({
+                    source: positionMap[dep],
+                    target: positionMap[taskId]
+                });
+            });
+        });
+        
+        svg.selectAll(".link")
+            .data(links)
+            .enter()
+            .append("line")
+            .attr("class", "link")
+            .attr("x1", d => d.source[0])
+            .attr("y1", d => d.source[1])
+            .attr("x2", d => d.target[0])
+            .attr("y2", d => d.target[1]);
+        
+        // Create nodes
+        svg.selectAll(".node")
+            .data(taskIds)
+            .enter()
+            .append("circle")
+            .attr("class", "node")
+            .attr("cx", d => positionMap[d][0])
+            .attr("cy", d => positionMap[d][1])
+            .attr("r", nodeRadius)
+            .attr("fill", d => tasks[d].color)
+            .append("title")
+            .text(d => tasks[d].description);
+        
+        svg.selectAll(".node-label")
+            .data(taskIds)
+            .enter()
+            .append("text")
+            .attr("class", "node-label")
+            .attr("x", d => positionMap[d][0])
+            .attr("y", d => positionMap[d][1])
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "middle")
+            .attr("fill", "white")
+            .attr("font-size", "12px")
+            .attr("font-weight", "bold")
+            .attr("pointer-events", "none")
+            .text(d => d.replace(/_/g, '\\n'));
+    </script>
+</body>
+</html>
+"""
+
+# Write to file
+output_file = '/Users/ssingh14/Downloads/XYZ_DEMO_CHECK/appgithubaction/dag_visualization.html'
+with open(output_file, 'w') as f:
+    f.write(html_content)
+
+print(f"✅ DAG Visualization created: {output_file}")
+print(f"📊 Open this file in your browser to see the DAG graph!")
